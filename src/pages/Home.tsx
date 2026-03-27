@@ -751,9 +751,6 @@ export default function Home() {
                     <p className="mt-2 text-sm uppercase tracking-[0.24em] text-emerald-50/84">
                       pontos no {data?.stats.topAssetTodayLabel ?? "MINI INDICE"}
                     </p>
-                    <p className="market-metric-font mt-3 text-xl font-semibold tracking-[-0.02em] text-emerald-50">
-                      {data?.stats.totalFinancialToday ?? "+R$ 0"} no dia
-                    </p>
                   </div>
 
                   <div className="rounded-[1.35rem] border border-slate-200 bg-[#fbfcfe] p-6">
