@@ -5,7 +5,7 @@ export type MarketQuote = {
 };
 
 export const fallbackMarketQuotes: MarketQuote[] = [
-  { symbol: "INDICE", value: "132.450", change: "+0,82%" },
+  { symbol: "INDICE", value: "--", change: "0,00%" },
   { symbol: "DOLAR", value: "5,18", change: "-0,14%" },
   { symbol: "BITCOIN", value: "68.420", change: "+2,11%" },
   { symbol: "OURO", value: "2.168,40", change: "+0,48%" },
