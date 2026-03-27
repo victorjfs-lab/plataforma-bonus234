@@ -6,10 +6,12 @@ import {
   CalendarClock,
   Check,
   Copy,
+  Dices,
   Gift,
   GraduationCap,
   Link2,
   PlayCircle,
+  ReceiptText,
   Sparkles,
   Ticket,
   TimerReset,
@@ -43,6 +45,8 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const [requestDurations, setRequestDurations] = useState<Record<string, number>>({});
   const [renewDurations, setRenewDurations] = useState<Record<string, number>>({});
+  const [monthlyDrawDate, setMonthlyDrawDate] = useState("2026-04-30");
+  const [bimonthlyDrawDate, setBimonthlyDrawDate] = useState("2026-05-30");
 
   const { data, isLoading } = useQuery({
     queryKey: ["admin-overview"],
@@ -154,6 +158,52 @@ export default function AdminDashboard() {
     onError: (error) => {
       toast({
         title: "Nao foi possivel revisar o video",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createRaffleMutation = useMutation({
+    mutationFn: ({
+      cycleType,
+      title,
+      prizeTitle,
+      drawDate,
+    }: {
+      cycleType: "monthly" | "bimonthly";
+      title: string;
+      prizeTitle: string;
+      drawDate: string;
+    }) => marketPortalRepository.createRaffleSnapshot({ cycleType, title, prizeTitle, drawDate }),
+    onSuccess: async () => {
+      await invalidatePortalQueries();
+      toast({
+        title: "Ciclo fechado",
+        description: "Os cupons foram congelados e o sorteio ja pode ser realizado com seguranca.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Nao foi possivel fechar o ciclo",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const drawRaffleMutation = useMutation({
+    mutationFn: (raffleId: string) => marketPortalRepository.drawRaffle(raffleId),
+    onSuccess: async (payload) => {
+      await invalidatePortalQueries();
+      toast({
+        title: "Sorteio realizado",
+        description: `${payload.winner.studentName} venceu com o numero ${payload.raffle.winningNumber}.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Nao foi possivel sortear",
         description: error instanceof Error ? error.message : "Tente novamente.",
         variant: "destructive",
       });
@@ -365,6 +415,218 @@ export default function AdminDashboard() {
       </section>
 
       <section className="grid gap-8 xl:grid-cols-[1.02fr_0.98fr]">
+        <Card className="border-border/60 bg-white shadow-sm">
+          <CardHeader>
+            <CardTitle>Sorteio mensal</CardTitle>
+            <CardDescription>
+              Cada 4 pontos aprovados viram 1 cupom. Feche o ciclo e sorteie com snapshot.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-secondary/30 p-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Participantes com cupons</p>
+                <p className="mt-1 text-2xl font-semibold">
+                  {portalData.raffles.currentMonthlyEntries.length}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium text-foreground">Total de cupons</p>
+                <p className="mt-1 text-2xl font-semibold">
+                  {portalData.raffles.currentMonthlyEntries.reduce(
+                    (total, item) => total + item.coupons,
+                    0,
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Data do sorteio</label>
+                <input
+                  type="date"
+                  value={monthlyDrawDate}
+                  onChange={(event) => setMonthlyDrawDate(event.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <Button
+                className="gap-2"
+                disabled={createRaffleMutation.isPending}
+                onClick={() =>
+                  createRaffleMutation.mutate({
+                    cycleType: "monthly",
+                    title: "Sorteio mensal Smart Flow News",
+                    prizeTitle: "Premiacao mensal",
+                    drawDate: new Date(`${monthlyDrawDate}T20:00:00`).toISOString(),
+                  })
+                }
+              >
+                <ReceiptText className="h-4 w-4" />
+                Fechar ciclo mensal
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              {portalData.raffles.currentMonthlyEntries.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Ainda nao ha cupons do mes.</p>
+              ) : (
+                portalData.raffles.currentMonthlyEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex items-center justify-between gap-4 rounded-2xl border border-border/70 p-4"
+                  >
+                    <div>
+                      <p className="font-semibold">{entry.studentName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {entry.points} pts · {entry.coupons} cupons
+                      </p>
+                    </div>
+                    <div className="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
+                      {entry.rangeStart} - {entry.rangeEnd}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border/60 bg-white shadow-sm">
+          <CardHeader>
+            <CardTitle>Sorteio bimestral extra</CardTitle>
+            <CardDescription>
+              O acumulado do bimestre fica separado para premio extra e pode ser sorteado depois.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/70 bg-secondary/30 p-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Participantes com cupons</p>
+                <p className="mt-1 text-2xl font-semibold">
+                  {portalData.raffles.currentBimonthlyEntries.length}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium text-foreground">Total de cupons</p>
+                <p className="mt-1 text-2xl font-semibold">
+                  {portalData.raffles.currentBimonthlyEntries.reduce(
+                    (total, item) => total + item.coupons,
+                    0,
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Data do sorteio</label>
+                <input
+                  type="date"
+                  value={bimonthlyDrawDate}
+                  onChange={(event) => setBimonthlyDrawDate(event.target.value)}
+                  className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                />
+              </div>
+              <Button
+                className="gap-2"
+                disabled={createRaffleMutation.isPending}
+                onClick={() =>
+                  createRaffleMutation.mutate({
+                    cycleType: "bimonthly",
+                    title: "Sorteio bimestral Smart Flow News",
+                    prizeTitle: "Premio extra do bimestre",
+                    drawDate: new Date(`${bimonthlyDrawDate}T20:00:00`).toISOString(),
+                  })
+                }
+              >
+                <ReceiptText className="h-4 w-4" />
+                Fechar ciclo bimestral
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              {portalData.raffles.currentBimonthlyEntries.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Ainda nao ha cupons do bimestre.</p>
+              ) : (
+                portalData.raffles.currentBimonthlyEntries.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex items-center justify-between gap-4 rounded-2xl border border-border/70 p-4"
+                  >
+                    <div>
+                      <p className="font-semibold">{entry.studentName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {entry.points} pts · {entry.coupons} cupons
+                      </p>
+                    </div>
+                    <div className="rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800">
+                      {entry.rangeStart} - {entry.rangeEnd}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-8 xl:grid-cols-[1.02fr_0.98fr]">
+        <Card className="border-border/60 bg-white shadow-sm">
+          <CardHeader>
+            <CardTitle>Historico de sorteios</CardTitle>
+            <CardDescription>
+              Aqui voce ve os ciclos fechados, o numero sorteado e o vencedor registrado.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {portalData.raffles.history.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nenhum sorteio fechado ainda.</p>
+            ) : (
+              portalData.raffles.history.map((raffle) => (
+                <div key={raffle.id} className="rounded-2xl border border-border/70 p-5">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div>
+                      <p className="font-semibold">{raffle.title}</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {raffle.prizeTitle} · {formatPortalDate(raffle.drawDate)}
+                      </p>
+                      <p className="mt-2 text-sm text-primary">
+                        {raffle.totalCoupons} cupons no snapshot
+                      </p>
+                      {raffle.winnerStudentName ? (
+                        <p className="mt-2 text-sm font-medium text-emerald-700">
+                          Vencedor: {raffle.winnerStudentName} · numero {raffle.winningNumber}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <div className="rounded-full bg-secondary px-4 py-2 text-sm font-medium text-foreground">
+                        {raffle.status === "drawn"
+                          ? "Sorteado"
+                          : raffle.status === "closed"
+                            ? "Fechado"
+                            : "Aberto"}
+                      </div>
+                      {raffle.status !== "drawn" ? (
+                        <Button
+                          className="gap-2"
+                          disabled={drawRaffleMutation.isPending}
+                          onClick={() => drawRaffleMutation.mutate(raffle.id)}
+                        >
+                          <Dices className="h-4 w-4" />
+                          Sortear agora
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
         <Card className="border-border/60 bg-white shadow-sm">
           <CardHeader>
             <CardTitle>Resultados aguardando aprovacao</CardTitle>

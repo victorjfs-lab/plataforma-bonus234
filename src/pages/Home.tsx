@@ -62,6 +62,19 @@ function getInitials(name: string) {
     .join("");
 }
 
+function formatCoverName(name: string) {
+  const parts = name.split(" ").filter(Boolean);
+
+  if (parts.length <= 1) {
+    return parts[0] ?? "";
+  }
+
+  const [firstName, ...rest] = parts;
+  const compactRest = rest.map((part) => part[0]?.toUpperCase()).filter(Boolean).join(" ");
+
+  return compactRest ? `${firstName} ${compactRest}` : firstName;
+}
+
 function parsePointsLabelValue(value: string | null) {
   if (!value) {
     return 0;
@@ -311,7 +324,7 @@ export default function Home() {
     activeTab === "resultados"
       ? pagedResults.map((item) => ({
           id: item.id,
-          title: item.studentName,
+          title: formatCoverName(item.studentName),
           avatarUrl: data?.studentAvatars?.[item.studentKey] ?? null,
           subtitle: `${item.marketLabel} / ${item.assetLabel}`,
           metric: item.profitLabel,
@@ -328,7 +341,7 @@ export default function Home() {
       : activeTab === "depoimentos"
         ? (data?.testimonialVideos ?? []).map((item) => ({
             id: item.studentKey,
-            title: item.studentName,
+            title: formatCoverName(item.studentName),
             avatarUrl: item.avatarImageUrl,
             subtitle: "Video enviado na plataforma",
             metric: "Video",
@@ -339,7 +352,7 @@ export default function Home() {
           }))
         : ranking.map((item, index) => ({
             id: item.name,
-            title: `${index + 1}. ${item.name}`,
+            title: `${index + 1}. ${formatCoverName(item.name)}`,
             avatarUrl: data?.studentAvatars?.[item.studentKey] ?? null,
             subtitle: `${item.count} envios na semana`,
             metric: `+${item.bonusPoints} pts`,
@@ -456,7 +469,7 @@ export default function Home() {
                     </Avatar>
                     <div>
                       <p className="font-semibold text-slate-950">
-                        {featuredResult?.studentName ?? "Sem destaque"}
+                        {featuredResult ? formatCoverName(featuredResult.studentName) : "Sem destaque"}
                       </p>
                       <p className="text-sm text-slate-500">
                         {featuredResult?.marketLabel ?? "Mercado"} /{" "}
@@ -829,7 +842,7 @@ export default function Home() {
               <div className="flex flex-col gap-6 p-6 lg:p-7">
                 <div className="pr-8">
                   <DialogTitle className="text-3xl font-semibold tracking-[-0.04em] text-white">
-                    {selectedResult.studentName}
+                    {formatCoverName(selectedResult.studentName)}
                   </DialogTitle>
                   <DialogDescription className="mt-2 text-sm uppercase tracking-[0.22em] text-white/52">
                     {formatPortalDate(selectedResult.submittedAt)} • {selectedResult.marketLabel} /{" "}
@@ -849,7 +862,9 @@ export default function Home() {
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="text-lg font-semibold text-white">{selectedResult.studentName}</p>
+                    <p className="text-lg font-semibold text-white">
+                      {formatCoverName(selectedResult.studentName)}
+                    </p>
                     <p className="text-sm text-white/58">Performance publicada no mural</p>
                   </div>
                 </div>

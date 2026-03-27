@@ -9,6 +9,8 @@ export type PortalPrize = {
 };
 
 export type PortalModerationStatus = "pending" | "approved" | "rejected";
+export type PortalRaffleCycleType = "monthly" | "bimonthly";
+export type PortalRaffleStatus = "open" | "closed" | "drawn";
 
 export type PortalResultSubmission = {
   id: string;
@@ -123,6 +125,40 @@ export type PortalAdminOverview = {
     points: number;
     lastSubmissionAt: string;
   }>;
+  raffles: {
+    currentMonthlyEntries: PortalRaffleEntrySnapshot[];
+    currentBimonthlyEntries: PortalRaffleEntrySnapshot[];
+    history: PortalRaffleRecord[];
+  };
+};
+
+export type PortalRaffleEntrySnapshot = {
+  id: string;
+  raffleId: string;
+  studentKey: string;
+  studentName: string;
+  studentEmail: string | null;
+  points: number;
+  coupons: number;
+  rangeStart: number;
+  rangeEnd: number;
+  createdAt: string;
+};
+
+export type PortalRaffleRecord = {
+  id: string;
+  cycleType: PortalRaffleCycleType;
+  title: string;
+  prizeTitle: string;
+  drawDate: string;
+  status: PortalRaffleStatus;
+  totalCoupons: number;
+  winningNumber: number | null;
+  winnerStudentKey: string | null;
+  winnerStudentName: string | null;
+  createdAt: string;
+  closedAt: string | null;
+  drawnAt: string | null;
 };
 
 export type SubmitPortalResultInput = {

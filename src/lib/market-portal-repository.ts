@@ -11,6 +11,9 @@ import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
   PortalAdminOverview,
   PortalHomeData,
+  PortalRaffleCycleType,
+  PortalRaffleEntrySnapshot,
+  PortalRaffleRecord,
   PortalModerationStatus,
   PortalPrize,
   PortalResultSubmission,
@@ -854,6 +857,11 @@ function buildAdminOverview(state: PortalState): PortalAdminOverview {
 
       return new Date(b.lastSubmissionAt || 0).getTime() - new Date(a.lastSubmissionAt || 0).getTime();
     }),
+    raffles: {
+      currentMonthlyEntries: [],
+      currentBimonthlyEntries: [],
+      history: [],
+    },
   };
 }
 
@@ -870,6 +878,110 @@ function buildTestimonialReviewUpdate(status: PortalModerationStatus, nowIso: st
     testimonial_status: status,
     testimonial_reviewed_at: nowIso,
     testimonial_points_granted_at: null,
+  };
+}
+
+function mapRaffleRow(row: any): PortalRaffleRecord {
+  return {
+    id: row.id,
+    cycleType: row.cycle_type,
+    title: row.title,
+    prizeTitle: row.prize_title,
+    drawDate: row.draw_date,
+    status: row.status,
+    totalCoupons: row.total_coupons,
+    winningNumber: row.winning_number,
+    winnerStudentKey: row.winner_student_key,
+    winnerStudentName: row.winner_student_name,
+    createdAt: row.created_at,
+    closedAt: row.closed_at,
+    drawnAt: row.drawn_at,
+  };
+}
+
+function mapRaffleEntryRow(row: any): PortalRaffleEntrySnapshot {
+  return {
+    id: row.id,
+    raffleId: row.raffle_id,
+    studentKey: row.student_key,
+    studentName: row.student_name,
+    studentEmail: row.student_email,
+    points: row.points,
+    coupons: row.coupons,
+    rangeStart: row.range_start,
+    rangeEnd: row.range_end,
+    createdAt: row.created_at,
+  };
+}
+
+function buildRaffleEntries(
+  state: PortalState,
+  now: Date,
+  cycleType: PortalRaffleCycleType,
+): Array<{
+  studentKey: string;
+  studentName: string;
+  studentEmail: string | null;
+  points: number;
+  coupons: number;
+  rangeStart: number;
+  rangeEnd: number;
+}> {
+  const period = cycleType === "monthly" ? "month" : "bimester";
+  const couponRows = getCouponsByStudentForPeriod(
+    { ...state, submissions: getApprovedSubmissions(state.submissions) },
+    now,
+    period,
+  )
+    .filter((item) => item.coupons > 0)
+    .sort((a, b) => {
+      if (b.coupons !== a.coupons) {
+        return b.coupons - a.coupons;
+      }
+      return a.studentName.localeCompare(b.studentName, "pt-BR");
+    });
+
+  let cursor = 1;
+
+  return couponRows.map((item) => {
+    const profile = state.profiles.find((profile) => profile.studentKey === item.studentKey);
+    const rangeStart = cursor;
+    const rangeEnd = cursor + item.coupons - 1;
+    cursor = rangeEnd + 1;
+
+    return {
+      studentKey: item.studentKey,
+      studentName: item.studentName,
+      studentEmail: profile?.studentEmail ?? null,
+      points: item.points,
+      coupons: item.coupons,
+      rangeStart,
+      rangeEnd,
+    };
+  });
+}
+
+async function getSupabaseRaffles() {
+  if (!supabase) {
+    throw new Error("Supabase indisponivel");
+  }
+
+  const [rafflesResult, entriesResult] = await Promise.all([
+    supabase.from("portal_raffles").select("*").order("created_at", { ascending: false }),
+    supabase.from("portal_raffle_entries").select("*").order("range_start", { ascending: true }),
+  ]);
+
+  if (rafflesResult.error) {
+    throw rafflesResult.error;
+  }
+
+  if (entriesResult.error) {
+    throw entriesResult.error;
+  }
+
+  return {
+    raffles: (rafflesResult.data ?? []).map(mapRaffleRow),
+    entries: (entriesResult.data ?? []).map(mapRaffleEntryRow),
   };
 }
 
@@ -1288,7 +1400,51 @@ export const marketPortalRepository = {
 
   async getAdminOverview(): Promise<PortalAdminOverview> {
     return trySupabase(
-      async () => buildAdminOverview(await getSupabasePortalState()),
+      async () => {
+        const [state, raffleData] = await Promise.all([getSupabasePortalState(), getSupabaseRaffles()]);
+        const overview = buildAdminOverview(state);
+        const openMonthly = raffleData.raffles.find(
+          (item) => item.cycleType === "monthly" && item.status !== "drawn",
+        );
+        const openBimonthly = raffleData.raffles.find(
+          (item) => item.cycleType === "bimonthly" && item.status !== "drawn",
+        );
+
+        return {
+          ...overview,
+          raffles: {
+            currentMonthlyEntries: openMonthly
+              ? raffleData.entries.filter((item) => item.raffleId === openMonthly.id)
+              : buildRaffleEntries(state, new Date(), "monthly").map((item, index) => ({
+                  id: `monthly-preview-${index}`,
+                  raffleId: "preview-monthly",
+                  studentKey: item.studentKey,
+                  studentName: item.studentName,
+                  studentEmail: item.studentEmail,
+                  points: item.points,
+                  coupons: item.coupons,
+                  rangeStart: item.rangeStart,
+                  rangeEnd: item.rangeEnd,
+                  createdAt: new Date().toISOString(),
+                })),
+            currentBimonthlyEntries: openBimonthly
+              ? raffleData.entries.filter((item) => item.raffleId === openBimonthly.id)
+              : buildRaffleEntries(state, new Date(), "bimonthly").map((item, index) => ({
+                  id: `bimonthly-preview-${index}`,
+                  raffleId: "preview-bimonthly",
+                  studentKey: item.studentKey,
+                  studentName: item.studentName,
+                  studentEmail: item.studentEmail,
+                  points: item.points,
+                  coupons: item.coupons,
+                  rangeStart: item.rangeStart,
+                  rangeEnd: item.rangeEnd,
+                  createdAt: new Date().toISOString(),
+                })),
+            history: raffleData.raffles,
+          },
+        };
+      },
       async () => buildAdminOverview(readPortalState()),
     );
   },
@@ -1382,6 +1538,144 @@ export const marketPortalRepository = {
         }
 
         return updated;
+      },
+    );
+  },
+
+  async createRaffleSnapshot(input: {
+    cycleType: PortalRaffleCycleType;
+    title: string;
+    prizeTitle: string;
+    drawDate: string;
+  }) {
+    const now = new Date();
+
+    return trySupabase(
+      async () => {
+        if (!supabase) {
+          throw new Error("Supabase indisponivel");
+        }
+
+        const state = await getSupabasePortalState();
+        const entries = buildRaffleEntries(state, now, input.cycleType);
+
+        if (!entries.length) {
+          throw new Error("Nao ha cupons suficientes para fechar esse sorteio.");
+        }
+
+        const raffleResult = await supabase
+          .from("portal_raffles")
+          .insert({
+            cycle_type: input.cycleType,
+            title: input.title,
+            prize_title: input.prizeTitle,
+            draw_date: input.drawDate,
+            status: "closed",
+            total_coupons: entries.reduce((total, item) => total + item.coupons, 0),
+            closed_at: now.toISOString(),
+          })
+          .select("*")
+          .single();
+
+        if (raffleResult.error) {
+          throw raffleResult.error;
+        }
+
+        const entriesInsert = await supabase
+          .from("portal_raffle_entries")
+          .insert(
+            entries.map((item) => ({
+              raffle_id: raffleResult.data.id,
+              student_key: item.studentKey,
+              student_name: item.studentName,
+              student_email: item.studentEmail,
+              points: item.points,
+              coupons: item.coupons,
+              range_start: item.rangeStart,
+              range_end: item.rangeEnd,
+            })),
+          )
+          .select("*");
+
+        if (entriesInsert.error) {
+          throw entriesInsert.error;
+        }
+
+        return {
+          raffle: mapRaffleRow(raffleResult.data),
+          entries: (entriesInsert.data ?? []).map(mapRaffleEntryRow),
+        };
+      },
+      async () => {
+        throw new Error("O sorteio real precisa de Supabase configurado.");
+      },
+    );
+  },
+
+  async drawRaffle(raffleId: string) {
+    return trySupabase(
+      async () => {
+        if (!supabase) {
+          throw new Error("Supabase indisponivel");
+        }
+
+        const [raffleResult, entriesResult] = await Promise.all([
+          supabase.from("portal_raffles").select("*").eq("id", raffleId).single(),
+          supabase
+            .from("portal_raffle_entries")
+            .select("*")
+            .eq("raffle_id", raffleId)
+            .order("range_start", { ascending: true }),
+        ]);
+
+        if (raffleResult.error) {
+          throw raffleResult.error;
+        }
+
+        if (entriesResult.error) {
+          throw entriesResult.error;
+        }
+
+        const raffle = mapRaffleRow(raffleResult.data);
+        const entries = (entriesResult.data ?? []).map(mapRaffleEntryRow);
+
+        if (!entries.length || raffle.totalCoupons <= 0) {
+          throw new Error("Esse sorteio nao possui cupons para sortear.");
+        }
+
+        const winningNumber = Math.floor(Math.random() * raffle.totalCoupons) + 1;
+        const winner = entries.find(
+          (item) => winningNumber >= item.rangeStart && winningNumber <= item.rangeEnd,
+        );
+
+        if (!winner) {
+          throw new Error("Nao foi possivel localizar o vencedor desse sorteio.");
+        }
+
+        const updateResult = await supabase
+          .from("portal_raffles")
+          .update({
+            status: "drawn",
+            winning_number: winningNumber,
+            winner_student_key: winner.studentKey,
+            winner_student_name: winner.studentName,
+            drawn_at: new Date().toISOString(),
+          })
+          .eq("id", raffleId)
+          .select("*")
+          .single();
+
+        if (updateResult.error) {
+          throw updateResult.error;
+        }
+
+        return {
+          raffle: mapRaffleRow(updateResult.data),
+          winner,
+        };
+      },
+      async () => {
+        throw new Error("O sorteio real precisa de Supabase configurado.");
       },
     );
   },
