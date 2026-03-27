@@ -83,7 +83,9 @@ async function fetchYahooQuote(item) {
   const result = payload?.chart?.result?.[0];
   const meta = result?.meta;
   const currentPrice = meta?.regularMarketPrice;
-  const previousClose = meta?.chartPreviousClose ?? meta?.previousClose;
+  // `chartPreviousClose` can refer to the beginning of the requested range,
+  // which inflates the daily variation for some assets like ^BVSP.
+  const previousClose = meta?.previousClose ?? meta?.chartPreviousClose;
 
   if (typeof currentPrice !== "number" || typeof previousClose !== "number" || previousClose === 0) {
     throw new Error(`Cotacao incompleta para ${item.symbol}`);
