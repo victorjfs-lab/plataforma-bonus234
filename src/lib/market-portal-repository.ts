@@ -216,6 +216,7 @@ function mapProfileRow(row: any): PortalStudentProfile {
     avatarImageUrl: row.avatar_image_url,
     avatarPointsGrantedAt: row.avatar_points_granted_at,
     testimonialVideoUrl: row.testimonial_video_url,
+    testimonialCaption: row.testimonial_caption ?? null,
     testimonialSubmittedAt: row.testimonial_submitted_at ?? row.testimonial_points_granted_at ?? null,
     testimonialPointsGrantedAt: row.testimonial_points_granted_at,
     testimonialStatus: row.testimonial_status ?? (row.testimonial_video_url ? "approved" : "pending"),
@@ -276,6 +277,7 @@ function getStudentProfile(
       avatarImageUrl: null,
       avatarPointsGrantedAt: null,
       testimonialVideoUrl: null,
+      testimonialCaption: null,
       testimonialSubmittedAt: null,
       testimonialPointsGrantedAt: null,
       testimonialStatus: "pending",
@@ -743,6 +745,7 @@ function buildHomeData(state: PortalState): PortalHomeData {
         studentName: profile.studentName,
         avatarImageUrl: profile.avatarImageUrl,
         videoUrl: profile.testimonialVideoUrl as string,
+        caption: profile.testimonialCaption,
         submittedAt: profile.testimonialPointsGrantedAt,
       })),
     stats: {

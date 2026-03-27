@@ -38,6 +38,7 @@ export type PortalStudentProfile = {
   avatarImageUrl: string | null;
   avatarPointsGrantedAt: string | null;
   testimonialVideoUrl: string | null;
+  testimonialCaption: string | null;
   testimonialSubmittedAt: string | null;
   testimonialPointsGrantedAt: string | null;
   testimonialStatus: PortalModerationStatus;
@@ -53,6 +54,7 @@ export type PortalHomeData = {
     studentName: string;
     avatarImageUrl: string | null;
     videoUrl: string;
+    caption: string | null;
     submittedAt: string | null;
   }>;
   stats: {
@@ -185,4 +187,5 @@ export type SubmitPortalTestimonialInput = {
   studentName: string;
   studentEmail?: string;
   videoUrl: string;
+  caption: string;
 };
