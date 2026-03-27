@@ -18,8 +18,8 @@ const configuredBrapiTickers = (process.env.BRAPI_TICKERS || publicFreeTickers.j
 const activeBrapiTickers = brapiApiKey
   ? configuredBrapiTickers
   : configuredBrapiTickers.filter((item) => publicFreeTickers.includes(item));
+const brapiIndexSymbols = [{ symbol: "^BVSP", label: "INDICE" }];
 const yahooSymbols = [
-  { symbol: "^BVSP", label: "INDICE" },
   { symbol: "BRL=X", label: "DOLAR" },
   { symbol: "BTC-USD", label: "BITCOIN" },
   { symbol: "GC=F", label: "OURO" },
@@ -70,6 +70,32 @@ function normalizeBrapiQuotes(results) {
     }));
 }
 
+async function fetchBrapiQuote(item) {
+  const response = await fetch(`${brapiBaseUrl}/quote/${encodeURIComponent(item.symbol)}`, {
+    headers: brapiApiKey ? { Authorization: `Bearer ${brapiApiKey}` } : undefined,
+  });
+
+  if (!response.ok) {
+    throw new Error(`brapi retornou ${response.status} para ${item.symbol}`);
+  }
+
+  const payload = await response.json();
+  const quote = payload?.results?.[0];
+
+  if (
+    typeof quote?.regularMarketPrice !== "number" ||
+    typeof quote?.regularMarketChangePercent !== "number"
+  ) {
+    throw new Error(`Cotacao incompleta para ${item.symbol}`);
+  }
+
+  return {
+    symbol: item.label,
+    value: formatDecimal(quote.regularMarketPrice),
+    change: formatChange(quote.regularMarketChangePercent),
+  };
+}
+
 async function fetchYahooQuote(item) {
   const response = await fetch(
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(item.symbol)}?interval=1d&range=5d`,
@@ -103,7 +129,7 @@ async function fetchYahooQuote(item) {
 async function fetchMarketQuotesBundle() {
   const tickers = activeBrapiTickers.length ? activeBrapiTickers : publicFreeTickers;
 
-  const [brapiQuotes, yahooQuotes] = await Promise.all([
+  const [brapiQuotes, brapiIndexQuotes, yahooQuotes] = await Promise.all([
     (async () => {
       const response = await fetch(`${brapiBaseUrl}/quote/${tickers.join(",")}`, {
         headers: brapiApiKey ? { Authorization: `Bearer ${brapiApiKey}` } : undefined,
@@ -116,14 +142,19 @@ async function fetchMarketQuotesBundle() {
       const payload = await response.json();
       return normalizeBrapiQuotes(payload?.results);
     })(),
+    Promise.allSettled(brapiIndexSymbols.map((item) => fetchBrapiQuote(item))),
     Promise.allSettled(yahooSymbols.map((item) => fetchYahooQuote(item))),
   ]);
+
+  const fulfilledBrapiIndexQuotes = brapiIndexQuotes
+    .filter((item) => item.status === "fulfilled")
+    .map((item) => item.value);
 
   const fulfilledYahooQuotes = yahooQuotes
     .filter((item) => item.status === "fulfilled")
     .map((item) => item.value);
 
-  return [...fulfilledYahooQuotes, ...brapiQuotes];
+  return [...fulfilledBrapiIndexQuotes, ...fulfilledYahooQuotes, ...brapiQuotes];
 }
 
 app.disable("x-powered-by");
