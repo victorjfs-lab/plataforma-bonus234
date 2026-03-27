@@ -917,6 +917,22 @@ function mapRaffleEntryRow(row: any): PortalRaffleEntrySnapshot {
   };
 }
 
+function isMissingRaffleTableError(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const candidate = error as SupabaseLikeError;
+  const message = `${candidate.message ?? ""} ${candidate.details ?? ""} ${candidate.hint ?? ""}`.toLowerCase();
+
+  return (
+    candidate.code === "42P01" ||
+    candidate.code === "PGRST205" ||
+    message.includes("portal_raffles") ||
+    message.includes("portal_raffle_entries")
+  );
+}
+
 function buildRaffleEntries(
   state: PortalState,
   now: Date,
@@ -975,10 +991,16 @@ async function getSupabaseRaffles() {
   ]);
 
   if (rafflesResult.error) {
+    if (isMissingRaffleTableError(rafflesResult.error)) {
+      return { raffles: [], entries: [] };
+    }
     throw rafflesResult.error;
   }
 
   if (entriesResult.error) {
+    if (isMissingRaffleTableError(entriesResult.error)) {
+      return { raffles: [], entries: [] };
+    }
     throw entriesResult.error;
   }
 

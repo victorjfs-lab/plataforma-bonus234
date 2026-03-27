@@ -48,13 +48,17 @@ export default function AdminDashboard() {
   const [monthlyDrawDate, setMonthlyDrawDate] = useState("2026-04-30");
   const [bimonthlyDrawDate, setBimonthlyDrawDate] = useState("2026-05-30");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: adminOverviewError } = useQuery({
     queryKey: ["admin-overview"],
     queryFn: () => academyRepository.getAdminOverview(),
     enabled: account?.role === "admin",
   });
 
-  const { data: portalData, isLoading: isPortalLoading } = useQuery({
+  const {
+    data: portalData,
+    isLoading: isPortalLoading,
+    error: portalOverviewError,
+  } = useQuery({
     queryKey: ["portal-admin"],
     queryFn: () => marketPortalRepository.getAdminOverview(),
     enabled: account?.role === "admin",
@@ -215,6 +219,18 @@ export default function AdminDashboard() {
   }
 
   if (isLoading || isPortalLoading || !data || !portalData) {
+    if (adminOverviewError || portalOverviewError) {
+      return (
+        <div className="rounded-3xl border border-destructive/30 bg-destructive/5 px-6 py-5 text-sm text-destructive shadow-sm">
+          {adminOverviewError instanceof Error
+            ? adminOverviewError.message
+            : portalOverviewError instanceof Error
+              ? portalOverviewError.message
+              : "Nao foi possivel carregar o painel administrativo agora."}
+        </div>
+      );
+    }
+
     return (
       <div className="rounded-3xl border border-border bg-card px-6 py-5 text-sm text-muted-foreground shadow-sm">
         Preparando painel administrativo...
