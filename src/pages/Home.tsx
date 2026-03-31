@@ -40,7 +40,7 @@ const marketNews = [
     time: "Banner principal",
     imageUrl:
       "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=1600&q=80",
-    href: "https://metodo.fluxosimplificado.com/oportunidade_smartflow/",
+    href: "https://metodo.fluxosimplificado.com/lista-espera-sistema_smartflow/",
   },
 ];
 

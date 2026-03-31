@@ -21,6 +21,7 @@ import type {
   PortalStudentProfile,
   SubmitPortalResultInput,
   SubmitPortalTestimonialInput,
+  UpdatePortalResultInput,
   UpdatePortalAvatarInput,
 } from "@/types/market-portal";
 
@@ -195,6 +196,9 @@ function mapSubmissionRow(row: any): PortalResultSubmission {
     studentEmail: row.student_email,
     marketLabel: row.market_label,
     assetLabel: row.asset_label,
+    financialValue: row.financial_value ?? null,
+    percentageValue: row.percentage_value ?? null,
+    pointsValue: row.points_value ?? null,
     financialLabel: row.financial_label,
     percentageLabel: row.percentage_label,
     pointsLabel: row.points_label,

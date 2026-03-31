@@ -19,6 +19,9 @@ export type PortalResultSubmission = {
   studentEmail: string;
   marketLabel: string;
   assetLabel: string;
+  financialValue: number | null;
+  percentageValue: number | null;
+  pointsValue: number | null;
   financialLabel: string | null;
   percentageLabel: string | null;
   pointsLabel: string | null;
@@ -174,6 +177,15 @@ export type SubmitPortalResultInput = {
   pointsResult: string;
   caption: string;
   imageUrl: string;
+};
+
+export type UpdatePortalResultInput = {
+  marketLabel: string;
+  assetLabel: string;
+  financialResult: string;
+  percentageResult: string;
+  pointsResult: string;
+  caption: string;
 };
 
 export type UpdatePortalAvatarInput = {
