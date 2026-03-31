@@ -185,11 +185,14 @@ export default function Home() {
 
   const results = data?.approvedResults ?? [];
   const featuredResult = useMemo(() => {
-    if (!results.length) {
+    const today = new Date();
+    const todaysResults = results.filter((item) => isSameDay(new Date(item.submittedAt), today));
+
+    if (!todaysResults.length) {
       return null;
     }
 
-    return [...results].sort((a, b) => {
+    return [...todaysResults].sort((a, b) => {
       const pointsDifference = parsePointsLabelValue(b.pointsLabel) - parsePointsLabelValue(a.pointsLabel);
 
       if (pointsDifference !== 0) {
