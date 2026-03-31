@@ -10,8 +10,10 @@ import {
   Gift,
   GraduationCap,
   Link2,
+  Pencil,
   PlayCircle,
   ReceiptText,
+  Save,
   Sparkles,
   Ticket,
   TimerReset,
@@ -25,7 +27,9 @@ import { marketPortalRepository } from "@/lib/market-portal-repository";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import type { PortalResultSubmission } from "@/types/market-portal";
 
 const statIcons = [Users, CalendarClock, Sparkles, Ticket];
 const accessOptions = [
@@ -35,8 +39,28 @@ const accessOptions = [
   { label: "1 ano", value: 365 },
 ];
 
+type ResultEditFormState = {
+  marketLabel: string;
+  assetLabel: string;
+  financialResult: string;
+  percentageResult: string;
+  pointsResult: string;
+  caption: string;
+};
+
 function formatPortalDate(value: string) {
   return format(new Date(value), "dd 'de' MMM", { locale: ptBR });
+}
+
+function buildResultEditForm(submission: PortalResultSubmission): ResultEditFormState {
+  return {
+    marketLabel: submission.marketLabel,
+    assetLabel: submission.assetLabel,
+    financialResult: submission.financialValue ? String(submission.financialValue) : "",
+    percentageResult: submission.percentageValue ? String(submission.percentageValue) : "",
+    pointsResult: submission.pointsValue ? String(submission.pointsValue) : "",
+    caption: submission.caption,
+  };
 }
 
 export default function AdminDashboard() {
@@ -47,6 +71,15 @@ export default function AdminDashboard() {
   const [renewDurations, setRenewDurations] = useState<Record<string, number>>({});
   const [monthlyDrawDate, setMonthlyDrawDate] = useState("2026-04-30");
   const [bimonthlyDrawDate, setBimonthlyDrawDate] = useState("2026-05-30");
+  const [editingSubmission, setEditingSubmission] = useState<PortalResultSubmission | null>(null);
+  const [editResultForm, setEditResultForm] = useState<ResultEditFormState>({
+    marketLabel: "",
+    assetLabel: "",
+    financialResult: "",
+    percentageResult: "",
+    pointsResult: "",
+    caption: "",
+  });
 
   const { data, isLoading, error: adminOverviewError } = useQuery({
     queryKey: ["admin-overview"],
@@ -135,6 +168,31 @@ export default function AdminDashboard() {
     onError: (error) => {
       toast({
         title: "Nao foi possivel revisar o resultado",
+        description: error instanceof Error ? error.message : "Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateResultMutation = useMutation({
+    mutationFn: ({
+      submissionId,
+      values,
+    }: {
+      submissionId: string;
+      values: ResultEditFormState;
+    }) => marketPortalRepository.updateResultSubmission(submissionId, values),
+    onSuccess: async () => {
+      await invalidatePortalQueries();
+      setEditingSubmission(null);
+      toast({
+        title: "Resultado atualizado",
+        description: "Os dados do resultado foram corrigidos com sucesso.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Nao foi possivel salvar a correcao",
         description: error instanceof Error ? error.message : "Tente novamente.",
         variant: "destructive",
       });
@@ -258,8 +316,146 @@ export default function AdminDashboard() {
     });
   }
 
+  function openResultEditor(submission: PortalResultSubmission) {
+    setEditingSubmission(submission);
+    setEditResultForm(buildResultEditForm(submission));
+  }
+
   return (
     <div className="space-y-8">
+      <Dialog
+        open={Boolean(editingSubmission)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingSubmission(null);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Editar resultado</DialogTitle>
+          </DialogHeader>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Ativo</label>
+              <select
+                className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={editResultForm.marketLabel}
+                onChange={(event) =>
+                  setEditResultForm((current) => ({
+                    ...current,
+                    marketLabel: event.target.value,
+                  }))
+                }
+              >
+                <option value="Mini indice">Mini indice</option>
+                <option value="Mini dolar">Mini dolar</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Contrato / ticker</label>
+              <input
+                className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={editResultForm.assetLabel}
+                onChange={(event) =>
+                  setEditResultForm((current) => ({
+                    ...current,
+                    assetLabel: event.target.value,
+                  }))
+                }
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Financeiro</label>
+              <input
+                className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={editResultForm.financialResult}
+                onChange={(event) =>
+                  setEditResultForm((current) => ({
+                    ...current,
+                    financialResult: event.target.value,
+                  }))
+                }
+                placeholder="Opcional"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Percentual</label>
+              <input
+                className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={editResultForm.percentageResult}
+                onChange={(event) =>
+                  setEditResultForm((current) => ({
+                    ...current,
+                    percentageResult: event.target.value,
+                    pointsResult: event.target.value ? "" : current.pointsResult,
+                  }))
+                }
+                placeholder="Preencha percentual ou pontos"
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium">Pontos lancados</label>
+              <input
+                className="h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={editResultForm.pointsResult}
+                onChange={(event) =>
+                  setEditResultForm((current) => ({
+                    ...current,
+                    pointsResult: event.target.value,
+                    percentageResult: event.target.value ? "" : current.percentageResult,
+                  }))
+                }
+                placeholder="Preencha percentual ou pontos"
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <label className="text-sm font-medium">Descricao curta</label>
+              <textarea
+                className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-3 text-sm"
+                value={editResultForm.caption}
+                onChange={(event) =>
+                  setEditResultForm((current) => ({
+                    ...current,
+                    caption: event.target.value,
+                  }))
+                }
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setEditingSubmission(null)}>
+              Cancelar
+            </Button>
+            <Button
+              className="gap-2"
+              disabled={updateResultMutation.isPending || !editingSubmission}
+              onClick={() => {
+                if (!editingSubmission) {
+                  return;
+                }
+
+                updateResultMutation.mutate({
+                  submissionId: editingSubmission.id,
+                  values: editResultForm,
+                });
+              }}
+            >
+              <Save className="h-4 w-4" />
+              Salvar correcao
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <section className="overflow-hidden rounded-[2rem] border border-border/60 bg-[linear-gradient(135deg,#102f3c_0%,#0b1f29_100%)] p-8 text-white shadow-lg">
         <div className="grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">
           <div>
@@ -689,6 +885,14 @@ export default function AdminDashboard() {
                     <div className="flex flex-wrap gap-3">
                       <Button
                         variant="outline"
+                        className="gap-2"
+                        onClick={() => openResultEditor(submission)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Editar
+                      </Button>
+                      <Button
+                        variant="outline"
                         className="gap-2 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
                         disabled={reviewResultMutation.isPending}
                         onClick={() =>
@@ -830,6 +1034,14 @@ export default function AdminDashboard() {
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">{submission.caption}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => openResultEditor(submission)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Editar
+                  </Button>
                   <div className="rounded-full bg-emerald-100 px-4 py-2 text-sm font-medium text-emerald-800">
                     {submission.profitLabel}
                   </div>

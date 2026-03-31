@@ -647,6 +647,9 @@ function validateSubmissionInput(input: SubmitPortalResultInput) {
   }
 
   return {
+    financialValue,
+    percentageValue,
+    pointsValue,
     financialLabel: financialValue ? formatCurrencyLabel(financialValue) : null,
     percentageLabel: percentageValue ? formatPercentLabel(percentageValue) : null,
     pointsLabel: pointsValue ? formatPointsLabel(pointsValue) : null,
@@ -1165,9 +1168,9 @@ export const marketPortalRepository = {
             financial_label: validated.financialLabel,
             percentage_label: validated.percentageLabel,
             points_label: validated.pointsLabel,
-            financial_value: input.financialResult ? parsePositiveNumber(input.financialResult) : null,
-            percentage_value: input.percentageResult ? parsePositiveNumber(input.percentageResult) : null,
-            points_value: input.pointsResult ? parsePositiveNumber(input.pointsResult) : null,
+            financial_value: validated.financialValue,
+            percentage_value: validated.percentageValue,
+            points_value: validated.pointsValue,
             profit_label: profitLabel,
             caption: input.caption.trim(),
             image_url: input.imageUrl,
@@ -1209,17 +1212,20 @@ export const marketPortalRepository = {
                 studentEmail: input.studentEmail.toLowerCase(),
                 marketLabel: input.marketLabel.trim(),
                 assetLabel: input.assetLabel.trim().toUpperCase(),
+                financialValue: validated.financialValue,
+                percentageValue: validated.percentageValue,
+                pointsValue: validated.pointsValue,
                 financialLabel: validated.financialLabel,
                 percentageLabel: validated.percentageLabel,
                 pointsLabel: validated.pointsLabel,
                 profitLabel,
                 caption: input.caption.trim(),
-              imageUrl: input.imageUrl,
-              submittedAt: now.toISOString(),
-              awardedPoints: POINTS_PER_RESULT,
-              moderationStatus: "pending",
-              reviewedAt: null,
-            },
+                imageUrl: input.imageUrl,
+                submittedAt: now.toISOString(),
+                awardedPoints: POINTS_PER_RESULT,
+                moderationStatus: "pending",
+                reviewedAt: null,
+              },
               ...current.submissions,
             ],
           };
@@ -1509,6 +1515,84 @@ export const marketPortalRepository = {
           submissions: current.submissions.map((item) =>
             item.id === submissionId
               ? { ...item, moderationStatus: status, reviewedAt }
+              : item,
+          ),
+        }));
+
+        const updated = nextState.submissions.find((item) => item.id === submissionId);
+        if (!updated) {
+          throw new Error("Resultado nao encontrado.");
+        }
+
+        return updated;
+      },
+    );
+  },
+
+  async updateResultSubmission(submissionId: string, input: UpdatePortalResultInput) {
+    const validated = validateSubmissionInput({
+      studentKey: "admin-edit",
+      studentName: "admin-edit",
+      studentEmail: "admin-edit@local",
+      marketLabel: input.marketLabel,
+      assetLabel: input.assetLabel,
+      financialResult: input.financialResult,
+      percentageResult: input.percentageResult,
+      pointsResult: input.pointsResult,
+      caption: input.caption,
+      imageUrl: "admin-edit",
+    });
+    const profitLabel =
+      validated.financialLabel || validated.percentageLabel || validated.pointsLabel || "+2 pts";
+
+    return trySupabase(
+      async () => {
+        if (!supabase) {
+          throw new Error("Supabase indisponivel");
+        }
+
+        const result = await supabase
+          .from("portal_result_submissions")
+          .update({
+            market_label: input.marketLabel.trim(),
+            asset_label: input.assetLabel.trim().toUpperCase(),
+            financial_label: validated.financialLabel,
+            percentage_label: validated.percentageLabel,
+            points_label: validated.pointsLabel,
+            financial_value: validated.financialValue,
+            percentage_value: validated.percentageValue,
+            points_value: validated.pointsValue,
+            profit_label: profitLabel,
+            caption: input.caption.trim(),
+          })
+          .eq("id", submissionId)
+          .select("*")
+          .single();
+
+        if (result.error) {
+          throw result.error;
+        }
+
+        return mapSubmissionRow(result.data);
+      },
+      async () => {
+        const nextState = updatePortalState((current) => ({
+          ...current,
+          submissions: current.submissions.map((item) =>
+            item.id === submissionId
+              ? {
+                  ...item,
+                  marketLabel: input.marketLabel.trim(),
+                  assetLabel: input.assetLabel.trim().toUpperCase(),
+                  financialValue: validated.financialValue,
+                  percentageValue: validated.percentageValue,
+                  pointsValue: validated.pointsValue,
+                  financialLabel: validated.financialLabel,
+                  percentageLabel: validated.percentageLabel,
+                  pointsLabel: validated.pointsLabel,
+                  profitLabel,
+                  caption: input.caption.trim(),
+                }
               : item,
           ),
         }));
